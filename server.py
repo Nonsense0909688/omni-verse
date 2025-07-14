@@ -1,35 +1,34 @@
-import asyncio
-import websockets
-from datetime import datetime
+const WebSocket = require('ws');
+const fs = require('fs');
 
-PORT = 10000
-clients = set()
-LOG_FILE = "chat_log.txt"
+const PORT = process.env.PORT || 10000;
+const wss = new WebSocket.Server({ port: PORT });
 
-async def log_message(message):
-    with open(LOG_FILE, "a") as f:
-        f.write(f"[{datetime.now()}] {message}\n")
+const LOG_FILE = 'chat_log.txt';
+const clients = new Set();
 
-async def handler(websocket, path):
-    clients.add(websocket)
-    await websocket.send("📢 Welcome to Python Render Chat!")
+function logMessage(msg) {
+  const timestamp = new Date().toISOString();
+  fs.appendFileSync(LOG_FILE, `[${timestamp}] ${msg}\n`);
+}
 
-    try:
-        async for message in websocket:
-            msg = f"{message}"
-            await log_message(msg)
+wss.on('connection', (ws) => {
+  clients.add(ws);
+  ws.send("📢 Connected to Omni-Verse Chat!");
 
-            # Broadcast to all other clients
-            await asyncio.gather(
-                *[client.send(msg) for client in clients if client != websocket]
-            )
-    except websockets.exceptions.ConnectionClosed:
-        pass
-    finally:
-        clients.remove(websocket)
+  ws.on('message', (message) => {
+    const msg = message.toString();
+    logMessage(msg);
+    for (const client of clients) {
+      if (client !== ws && client.readyState === WebSocket.OPEN) {
+        client.send(msg);
+      }
+    }
+  });
 
-start_server = websockets.serve(handler, "0.0.0.0", PORT)
+  ws.on('close', () => {
+    clients.delete(ws);
+  });
+});
 
-print(f"✅ Server running on port {PORT}")
-asyncio.get_event_loop().run_until_complete(start_server)
-asyncio.get_event_loop().run_forever()
+console.log(`✅ WebSocket server running on port ${PORT}`);
